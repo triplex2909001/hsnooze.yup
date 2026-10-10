@@ -31,7 +31,9 @@ Notes:
 import argparse
 import json
 import os
+import random
 import sys
+import time
 from datetime import datetime, timezone
 
 CHUNK_SIZE = 32 * 1024 * 1024  # 32 MB resumable chunks
@@ -137,12 +139,27 @@ def resumable_upload(youtube, args, body):
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
 
     response = None
+    retries = 0
     while response is None:
         try:
             status, response = request.next_chunk()
-        except Exception as e:  # resumable: retryable errors are raised per-chunk
-            print(f"  chunk error (will retry): {e}", file=sys.stderr)
-            continue
+            retries = 0  # chunk OK -> reset counter
+        except HttpError as e:
+            if e.resp.status in (429, 500, 502, 503, 504) and retries < 8:
+                retries += 1
+                wait = 2 ** retries + random.random()
+                print(f"  retryable HTTP {e.resp.status}, retry {retries}/8 in {wait:.1f}s", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            raise
+        except (ConnectionError, TimeoutError, OSError) as e:
+            if retries < 8:
+                retries += 1
+                wait = 2 ** retries + random.random()
+                print(f"  network error, retry {retries}/8 in {wait:.1f}s: {e}", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            raise
         if status:
             print(f"  progress: {int(status.progress() * 100)}%")
 
@@ -184,7 +201,10 @@ def main(argv=None):
     youtube = get_authenticated_service()
     video = resumable_upload(youtube, args, body)
     video_id = video["id"]
-    set_thumbnail(youtube, video_id, args.thumbnail)
+    try:
+        set_thumbnail(youtube, video_id, args.thumbnail)
+    except Exception as e:
+        print(f"WARNING: thumbnail upload failed, video is already live: {e}", file=sys.stderr)
 
     url = f"https://www.youtube.com/watch?v={video_id}"
     print(f"VIDEO_ID={video_id}")

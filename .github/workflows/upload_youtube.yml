@@ -72,7 +72,7 @@ jobs:
           echo "$GDRIVE_SA_JSON" > /tmp/sa.json
           pip install --quiet gdown
           # gdown handles large Drive files via confirmation bypass
-          gdown --fuzzy "https://drive.google.com/uc?id=${FILE_ID}" -O /tmp/video.mp4
+          gdown "https://drive.google.com/uc?id=${FILE_ID}" -O /tmp/video.mp4
           ls -lh /tmp/video.mp4
 
       - name: Fetch Video from Artifact
@@ -97,7 +97,7 @@ jobs:
         if: inputs.thumbnail_drive_id != ''
         run: |
           pip install --quiet gdown
-          gdown --fuzzy "https://drive.google.com/uc?id=${{ inputs.thumbnail_drive_id }}" -O /tmp/thumb.jpg
+          gdown "https://drive.google.com/uc?id=${{ inputs.thumbnail_drive_id }}" -O /tmp/thumb.jpg
           ls -lh /tmp/thumb.jpg || true
 
       - name: Upload to YouTube
